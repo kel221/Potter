@@ -1,252 +1,145 @@
--- Chili Hub para Steal a Brainrot - By Grok (Versão Leve com Infinite Jump e Correções)
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+import pygame
+import random
 
--- Configurações (todas off por padrão para leveza)
-local aimbotEnabled = false
-local highestBrainrotESP = false
-local timerESP = false
-local playerESP = false
-local infiniteJump = false
+# Inicialização do Pygame
+pygame.init()
 
--- GUI Principal (minimalista)
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "ChiliHub"
+# Configurações da tela
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Roube um Brainrot")
 
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 300, 0, 250)
-MainFrame.Position = UDim2.new(0.5, -150, 0.5, -125)
-MainFrame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-MainFrame.BackgroundTransparency = 0.2
-MainFrame.Active = true
-MainFrame.Draggable = true
+# Cores
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
 
--- Botão de Fechar (X)
-local CloseButton = Instance.new("TextButton", MainFrame)
-CloseButton.Size = UDim2.new(0, 30, 0, 30)
-CloseButton.Position = UDim2.new(1, -30, 0, 0)
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.new(1, 0, 0)
-CloseButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-CloseButton.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
+# Classe do Jogador
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 50))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.x = 100
+        self.rect.y = SCREEN_HEIGHT - 100
+        self.speed = 5
+        self.jump_power = -15
+        self.gravity = 0.8
+        self.vel_y = 0
+        self.is_jumping = False
 
--- Botão de Minimizar (- / +)
-local MinimizeButton = Instance.new("TextButton", MainFrame)
-MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
-MinimizeButton.Position = UDim2.new(1, -60, 0, 0)
-MinimizeButton.Text = "-"
-MinimizeButton.TextColor3 = Color3.new(1, 1, 0)
-MinimizeButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-local isMinimized = false
-MinimizeButton.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    MainFrame.Size = isMinimized and UDim2.new(0, 300, 0, 30) or UDim2.new(0, 300, 0, 250)
-    MinimizeButton.Text = isMinimized and "+" or "-"
-end)
+    def update(self):
+        # Movimento horizontal
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
+            self.rect.x += self.speed
+        # Pulo
+        if keys[pygame.K_SPACE] and not self.is_jumping:
+            self.vel_y = self.jump_power
+            self.is_jumping = True
+        # Aplicar gravidade
+        self.vel_y += self.gravity
+        self.rect.y += self.vel_y
+        # Colisão com o chão
+        if self.rect.bottom > SCREEN_HEIGHT:
+            self.rect.bottom = SCREEN_HEIGHT
+            self.vel_y = 0
+            self.is_jumping = False
 
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, -60, 0, 30)
-Title.Text = "Steal a Brainrot - Chili Hub - By KhanThSky"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.BackgroundTransparency = 1
+# Classe dos Itens de Brainrot
+class BrainrotItem(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, SCREEN_WIDTH - 30)
+        self.rect.y = -50
+        self.speed = 3
 
--- Tabs (botões no topo)
-local tabs = {"Main", "Stealer", "Helper", "Server", "Discord"}
-local tabFrames = {}
-local currentTab = nil
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()  # Remove item se sair da tela
 
-for i, tabName in ipairs(tabs) do
-    local TabButton = Instance.new("TextButton", MainFrame)
-    TabButton.Size = UDim2.new(0.2, 0, 0, 30)
-    TabButton.Position = UDim2.new(0.2 * (i-1), 0, 0, 30)
-    TabButton.Text = tabName
-    TabButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-    TabButton.TextColor3 = Color3.new(1, 1, 1)
-    TabButton.MouseButton1Click:Connect(function()
-        if currentTab then tabFrames[currentTab].Visible = false end
-        tabFrames[tabName].Visible = true
-        currentTab = tabName
-    end)
+# Classe dos Obstáculos
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((40, 40))
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, SCREEN_WIDTH - 40)
+        self.rect.y = -50
+        self.speed = 4
 
-    local TabFrame = Instance.new("Frame", MainFrame)
-    TabFrame.Size = UDim2.new(1, 0, 1, -60)
-    TabFrame.Position = UDim2.new(0, 0, 0, 60)
-    TabFrame.BackgroundTransparency = 1
-    TabFrame.Visible = false
-    tabFrames[tabName] = TabFrame
-end
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()
 
--- Conteúdo das Tabs
--- Main: Vazio
-local MainLabel = Instance.new("TextLabel", tabFrames["Main"])
-MainLabel.Size = UDim2.new(1, 0, 1, 0)
-MainLabel.Text = "Bem-vindo ao Chili Hub!"
-MainLabel.TextColor3 = Color3.new(1, 1, 1)
+# Grupos de sprites
+all_sprites = pygame.sprite.Group()
+brainrot_items = pygame.sprite.Group()
+obstacles = pygame.sprite.Group()
+player = Player()
+all_sprites.add(player)
 
--- Stealer: Vazio
-local StealerLabel = Instance.new("TextLabel", tabFrames["Stealer"])
-StealerLabel.Size = UDim2.new(1, 0, 1, 0)
-StealerLabel.Text = "Funções de Stealer em breve."
-StealerLabel.TextColor3 = Color3.new(1, 1, 1)
+# Variáveis do jogo
+score = 0
+font = pygame.font.SysFont(None, 36)
+clock = pygame.time.Clock()
+running = True
+spawn_timer = 0
 
--- Helper: Funções com toggles
-local function createToggle(parent, name, default, callback)
-    local Toggle = Instance.new("TextButton", parent)
-    Toggle.Size = UDim2.new(1, 0, 0, 30)
-    Toggle.Text = name .. ": OFF"
-    Toggle.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    Toggle.TextColor3 = Color3.new(1, 1, 1)
-    Toggle.MouseButton1Click:Connect(function()
-        default = not default
-        Toggle.Text = name .. ": " .. (default and "ON" or "OFF")
-        callback(default)
-    end)
-    return Toggle
-end
+# Loop principal
+while running:
+    # Eventos
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
 
-local helperY = 0
-createToggle(tabFrames["Helper"], "Aimbot (Taser Gun, Web Slinger, Laser Cape)", aimbotEnabled, function(state)
-    aimbotEnabled = state
-end).Position = UDim2.new(0, 0, 0, helperY); helperY = helperY + 30
+    # Spawn de itens e obstáculos
+    spawn_timer += 1
+    if spawn_timer > 30:  # A cada 30 frames
+        if random.random() < 0.6:  # 60% de chance de spawnar item
+            item = BrainrotItem()
+            all_sprites.add(item)
+            brainrot_items.add(item)
+        else:  # 40% de chance de spawnar obstáculo
+            obstacle = Obstacle()
+            all_sprites.add(obstacle)
+            obstacles.add(obstacle)
+        spawn_timer = 0
 
-createToggle(tabFrames["Helper"], "Highest Value Brainrot ESP", highestBrainrotESP, function(state)
-    highestBrainrotESP = state
-end).Position = UDim2.new(0, 0, 0, helperY); helperY = helperY + 30
+    # Atualizar
+    all_sprites.update()
 
-createToggle(tabFrames["Helper"], "Timer ESP", timerESP, function(state)
-    timerESP = state
-end).Position = UDim2.new(0, 0, 0, helperY); helperY = helperY + 30
+    # Colisões
+    if pygame.sprite.spritecollide(player, brainrot_items, True):
+        score += 10  # Ganha pontos ao coletar brainrot
+    if pygame.sprite.spritecollide(player, obstacles, False):
+        running = False  # Game over ao colidir com obstáculo
 
-createToggle(tabFrames["Helper"], "Player ESP", playerESP, function(state)
-    playerESP = state
-end).Position = UDim2.new(0, 0, 0, helperY); helperY = helperY + 30
+    # Desenhar
+    screen.fill(WHITE)
+    all_sprites.draw(screen)
+    score_text = font.render(f"Brainrot Score: {score}", True, (0, 0, 0))
+    screen.blit(score_text, (10, 10))
+    pygame.display.flip()
 
-createToggle(tabFrames["Helper"], "Infinite Jump", infiniteJump, function(state)
-    infiniteJump = state
-end).Position = UDim2.new(0, 0, 0, helperY); helperY = helperY + 30
+    # Controlar FPS
+    clock.tick(60)
 
--- Server: Vazio
-local ServerLabel = Instance.new("TextLabel", tabFrames["Server"])
-ServerLabel.Size = UDim2.new(1, 0, 1, 0)
-ServerLabel.Text = "Funções de Server em breve."
-ServerLabel.TextColor3 = Color3.new(1, 1, 1)
+# Game over
+game_over_text = font.render(f"Game Over! Score: {score}", True, (0, 0, 0))
+screen.blit(game_over_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2))
+pygame.display.flip()
+pygame.time.wait(2000)
 
--- Discord: Link atualizado
-local DiscordLabel = Instance.new("TextLabel", tabFrames["Discord"])
-DiscordLabel.Size = UDim2.new(1, 0, 1, 0)
-DiscordLabel.Text = "Junte-se ao meu servidor: https://discord.gg/9hDMnmS9"
-DiscordLabel.TextColor3 = Color3.new(0, 0.8, 1)
-DiscordLabel.TextWrapped = true
-
--- Ativa tab inicial
-tabFrames["Main"].Visible = true
-currentTab = "Main"
-
--- Funções Otimizadas
-local function findTimerObject(base)
-    local possibleNames = {"LockTimer", "Timer", "LockTime", "Cooldown", "LockCooldown", "BaseTimer", "LockDuration", "CooldownTimer"}
-    for _, name in pairs(possibleNames) do
-        local timer = base:FindFirstChild(name, true) -- Busca recursiva
-        if timer and (timer:IsA("IntValue") or timer:IsA("NumberValue") or timer:IsA("FloatValue")) then
-            return timer
-        end
-    end
-    return nil
-end
-
--- Depuração inicial leve para timers
-for _, base in pairs(workspace.Bases:GetChildren()) do
-    local timer = findTimerObject(base)
-    if timer then
-        print("Timer encontrado em " .. base.Name .. ": " .. timer.Name .. " = " .. timer.Value)
-    end
-end
-
--- Infinite Jump Listener
-UserInputService.InputBegan:Connect(function(input)
-    if infiniteJump and input.KeyCode == Enum.KeyCode.Space and LocalPlayer.Character then
-        LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if playerESP then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-                local char = player.Character
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then part.Transparency = 0 end
-                end
-                local hl = char:FindFirstChild("Highlight") or Instance.new("Highlight", char)
-                hl.FillColor = Color3.new(1, 0, 0)
-                local bb = char:FindFirstChild("BillboardGui") or Instance.new("BillboardGui", char)
-                bb.Adornee = char:FindFirstChild("HumanoidRootPart")
-                bb.StudsOffset = Vector3.new(0, 3, 0)
-                local lbl = bb:FindFirstChild("TextLabel") or Instance.new("TextLabel", bb)
-                lbl.Text = player.Name
-            end
-        end
-    end
-
-    if timerESP then
-        for _, base in pairs(workspace.Bases:GetChildren()) do
-            local timer = findTimerObject(base)
-            local val = timer and timer.Value or 0
-            local text = val > 0 and tostring(val) .. "s" or "Open"
-            local primary = base:FindFirstChildWhichIsA("BasePart") or base:FindFirstChild("Base", true)
-            if primary then
-                local bb = base:FindFirstChild("BillboardGui") or Instance.new("BillboardGui", base)
-                bb.Adornee = primary
-                bb.StudsOffset = Vector3.new(0, 5, 0)
-                local lbl = bb:FindFirstChild("TextLabel") or Instance.new("TextLabel", bb)
-                lbl.Text = base.Name .. ": " .. text
-                lbl.TextColor3 = val > 0 and Color3.new(1, 0, 0) or Color3.new(0, 1, 0)
-            end
-        end
-    end
-
-    if highestBrainrotESP then
-        local maxValue = 0
-        local maxBrainrot = nil
-        for _, brainrot in pairs(workspace.Ramp.Brainrots:GetChildren()) do
-            local value = brainrot:FindFirstChild("Value") and brainrot.Value.Value or 0
-            if value > maxValue then
-                maxValue = value
-                maxBrainrot = brainrot
-            end
-        end
-        if maxBrainrot then
-            local hl = maxBrainrot:FindFirstChild("Highlight") or Instance.new("Highlight", maxBrainrot)
-            hl.FillColor = Color3.new(0, 1, 0)
-        end
-    end
-
-    if aimbotEnabled then
-        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-        if tool and (tool.Name == "Taser Gun" or tool.Name == "Web Slinger" or tool.Name == "Laser Cape") then
-            local closest = nil
-            local minDist = math.huge
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (player.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                    if dist < minDist then
-                        minDist = dist
-                        closest = player.Character.HumanoidRootPart
-                    end
-                end
-            end
-            if closest then
-                Mouse.Target = closest
-            end
-        end
-    end
-end)
-
-print("Chili Hub carregado! Use com responsabilidade.")
+pygame.quit()
